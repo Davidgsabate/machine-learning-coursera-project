@@ -1,0 +1,140 @@
+---
+title: "Predicting type of movement"
+author: "David García Sabaté"
+date: "8/12/2019"
+output:
+  html_document:
+    code_folding: show
+    df_print: paged
+    self_contained: yes
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(caret)
+library(ipred)
+```
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the [website](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+
+### Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+### Purpose of the analysis
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+ - Description of the model
+ - Use of cross validation 
+ - Expected out of sample error 
+ - Use of the prediction model to predict 20 different test cases
+ 
+
+### Exploratory data analysis and data preparation
+
+```{r}
+archivo = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+file <- download.file(archivo, destfile = "pml.csv")
+data <- read.csv("pml.csv", stringsAsFactors = F)
+```
+
+Factor the variable classe
+
+```{r}
+str(data$classe)
+unique(data$classe)
+data$classe <- factor(data$classe)
+```
+
+Check the proportion of values of the variable class
+
+```{r}
+round(prop.table(table(data$classe)), 2)
+```
+
+At this moment we have 160 variables. Next, we will eliminate variables that are not significant for the analysis.
+
+```{r}
+data_clean <- data
+dim(data_clean)
+```
+
+- We remove the first seven columns, since they do not give information about the movement
+
+```{r}
+data_clean <- data_clean[,-c(1:7)]
+dim(data_clean)
+```
+
+
+- We will also remove columns with a variance close to zero, since they do not give information
+
+```{r}
+nzv <- nearZeroVar(data_clean, saveMetrics = T)
+data_clean <- data_clean[,nzv$nzv==FALSE]
+dim(data_clean)
+```
+
+
+- We will remove those variables that contain na values in a proportion greater than 95%
+
+```{r}
+AllNA    <- sapply(data_clean, function(x) mean(is.na(x))) > 0.95
+data_clean <- data_clean[, AllNA==FALSE]
+dim(data_clean)
+```
+
+We have left 19,000 observations of 53 variables.
+We divide the dataset into training and validation
+
+```{r}
+set.seed(3455)
+inTrain <- createDataPartition(y = data_clean$classe, p = 0.75, list = F)
+training <- data_clean[inTrain,]
+validation <- data_clean[-inTrain,]
+# Comprobamos que se mantienen las proporciones
+round(prop.table(table(training$classe)), 2)
+round(prop.table(table(validation$classe)), 2)
+```
+
+
+### Predictive model
+
+We will use Random Forest beccause it is an algorithm that performs well on most problems, can handle categorical or continuous features, and can be used on very large datasets.
+
+```{r}
+rf <- randomForest::randomForest(classe~., data = training)
+prediction <- predict(rf, validation)
+confusionMatrix(prediction, validation$classe)
+```
+
+
+### Model application to test data
+
+```{r}
+archivo = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+file <- download.file(archivo, destfile = "pml_testing.csv")
+data_testing <- read.csv("pml_testing.csv", stringsAsFactors = F)
+prediction <- predict(rf, data_testing)
+prediction
+```
+
+
+
